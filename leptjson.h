@@ -4,6 +4,11 @@
 #include<assert.h>
 #include<string.h>
 #include<stdlib.h>
+
+typedef struct 
+{
+    const char* json;
+}lept_context;
 //枚举出来6中数据类型
 typedef enum { LEPT_NULL, LEPT_FALSE, LEPT_TRUE, LEPT_NUMBER, LEPT_STRING, LEPT_ARRAY, LEPT_OBJECT } lept_type;
 //枚举出来返回值
@@ -15,10 +20,12 @@ enum {
 };
 typedef struct
 {
-    lept_type type;
+    lept_type type;  //类型
+    double n;  //数字(type == LEPT_NUMBER)
 
 }lept_value; 
 int lept_parse(lept_value* v, const char* json);   //解析json
 lept_type lept_get_type(const lept_value* v); //获取访问结果
-
+double lept_get_number(const lept_value* v);//获取数字
+static int lept_parse_number(lept_context* c, lept_value* v);
 #endif 
