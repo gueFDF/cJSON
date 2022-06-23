@@ -95,6 +95,8 @@ static void test_access_string() {
     EXPECT_EQ_STRING("Hello", lept_get_string(&v), lept_get_string_length(&v));
     lept_free(&v);
 }
+
+
 static void test_parse_number() {
     TEST_NUMBER(0.0, "0");
     TEST_NUMBER(0.0, "-0");
