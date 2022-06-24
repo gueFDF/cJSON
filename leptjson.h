@@ -24,9 +24,11 @@ enum {
     LEPT_PARSE_NUMBER_TOO_BIG,    //太大
     LEPT_PARSE_MISS_QUOTATION_MARK,
     LEPT_PARSE_INVALID_STRING_ESCAPE,
-    LEPT_PARSE_INVALID_STRING_CHAR
+    LEPT_PARSE_INVALID_STRING_CHAR,
+    LEPT_PARSE_INVALID_UNICODE_HEX,
+    LEPT_PARSE_INVALID_UNICODE_SURROGATE
 };
-
+#define STRING_ERROR(ret) do { c->top = head; return ret; } while(0)
 typedef struct
 {
     lept_type type;  //类型
@@ -56,7 +58,10 @@ void lept_set_boolean(lept_value* v, int b);
 double lept_get_number(const lept_value* v);
 void lept_set_number(lept_value* v, double n);
 
+static int lept_parse_string(lept_context*c,lept_value*v);
 const char* lept_get_string(const lept_value* v);
 size_t lept_get_string_length(const lept_value* v);
 void lept_set_string(lept_value* v, const char* s, size_t len);
+static const char* lept_parse_hex4(const char* p, unsigned* u);
+static void lept_encode_utf8(lept_context* c, unsigned u);
 #endif 
