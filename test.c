@@ -20,25 +20,36 @@ static int test_pass=0;
 #define EXPECT_EQ_INT(expect,actual) EXPECT_EQ_BASE(((expect)==(actual)),expect,actual,"%d")
 #define EXPECT_EQ_DOUBLE(expect,actual) EXPECT_EQ_BASE(((expect)==(actual)),expect,actual,"%.17g")
 #define EXPECT_EQ_STRING(expect,actual,alength) EXPECT_EQ_BASE(sizeof(expect)-1==(alength)&& memcmp(expect,actual,alength)==0,expect,actual,"%s")
-#define EXPECT_EQ_TRUE(actual)  EXPECT_EQ_BASE(actual!=0,"true","false","%s")
-#define EXPECT_EQ_FALSE(atual)  EXPECT_EQ_BASE(actual==0,"false","true","%s")
+#define EXPECT_TRUE(actual)  EXPECT_EQ_BASE((actual)!=0,"true","false","%s")
+#define EXPECT_FALSE(actual)  EXPECT_EQ_BASE((actual)==0,"false","true","%s")
 
 #define TESTERROR(error,json)\
     do{\
         lept_value v;\
-        v.type=LEPT_FALSE;\
+        lept_init(&v);\
         EXPECT_EQ_INT(error,lept_parse(&v,json));\
         EXPECT_EQ_INT(LEPT_NULL,lept_get_type(&v));\
+         lept_free(&v);\
     }while(0)
 
 
 #define TEST_NUMBER(expect,json)\
     do{ \
         lept_value v;\
-        v.type=LEPT_NULL;\
+        lept_init(&v);\
         EXPECT_EQ_INT(LEPT_PARSE_OK,lept_parse(&v,json));\
         EXPECT_EQ_INT(LEPT_NUMBER,lept_get_type(&v));\
         EXPECT_EQ_DOUBLE(expect,lept_get_number(&v));\
+         lept_free(&v);\
+    }while(0)
+#define TEST_STRING(expect,json)\
+    do{\
+        lept_value v;\
+        lept_init(&v);\
+        EXPECT_EQ_INT(LEPT_PARSE_OK,lept_parse(&v,json));\
+        EXPECT_EQ_INT(LEPT_STRING,lept_get_type(&v));\
+        EXPECT_EQ_STRING(expect,lept_get_string(&v),lept_get_string_length(&v));\
+        lept_free(&v);\
     }while(0)
 static void test_parse_error()
 {
@@ -62,13 +73,24 @@ static void test_parse_error()
     TESTERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0123"); /* after zero should be '.' or nothing */
     TESTERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0x0");
     TESTERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0x123");
+
+   
+    TESTERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\v\"");
+    TESTERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\'\"");
+    TESTERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\0\"");
+    TESTERROR(LEPT_PARSE_INVALID_STRING_ESCAPE, "\"\\x12\"");
+
+    TESTERROR(LEPT_PARSE_INVALID_STRING_CHAR, "\"\x01\"");
+    TESTERROR(LEPT_PARSE_INVALID_STRING_CHAR, "\"\x1F\"");
 }
 static void test_parse_null() 
 {
     lept_value v;
-    v.type = LEPT_FALSE;TESTERROR(LEPT_PARSE_ROOT_NOT_SINGULAR,"null    x");
+    v.type = LEPT_FALSE;
+    TESTERROR(LEPT_PARSE_ROOT_NOT_SINGULAR,"null    x");
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "null"));
     EXPECT_EQ_INT(LEPT_NULL, lept_get_type(&v));
+    lept_free(&v);
 }
 static void test_parse_true() 
 {
@@ -76,14 +98,17 @@ static void test_parse_true()
     v.type = LEPT_FALSE;
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "true"));
     EXPECT_EQ_INT(LEPT_TRUE, lept_get_type(&v));
+    lept_free(&v);
 }
 
 static void test_parse_false() 
 {
     lept_value v;
+    lept_init(&v);
     v.type = LEPT_TRUE;
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "false"));
     EXPECT_EQ_INT(LEPT_FALSE, lept_get_type(&v));
+    lept_free(&v);
 }
 
 static void test_access_string() {
@@ -94,6 +119,23 @@ static void test_access_string() {
     lept_set_string(&v, "Hello", 5);
     EXPECT_EQ_STRING("Hello", lept_get_string(&v), lept_get_string_length(&v));
     lept_free(&v);
+
+}
+static void test_parse_string() 
+{
+    TEST_STRING("", "\"\"");
+    TEST_STRING("Hello", "\"Hello\"");
+
+    TEST_STRING("Hello\nWorld", "\"Hello\\nWorld\"");
+    TEST_STRING("\" \\ / \b \f \n \r \t", "\"\\\" \\\\ \\/ \\b \\f \\n \\r \\t\"");
+
+
+    TEST_STRING("Hello\0World", "\"Hello\\u0000World\"");
+    TEST_STRING("\x24", "\"\\u0024\"");         /* Dollar sign U+0024 */
+    TEST_STRING("\xC2\xA2", "\"\\u00A2\"");     /* Cents sign U+00A2 */
+    TEST_STRING("\xE2\x82\xAC", "\"\\u20AC\""); /* Euro sign U+20AC */
+    TEST_STRING("\xF0\x9D\x84\x9E", "\"\\uD834\\uDD1E\"");  /* G clef sign U+1D11E */
+    TEST_STRING("\xF0\x9D\x84\x9E", "\"\\ud834\\udd1e\"");  /* G clef sign U+1D11E */
 }
 
 
@@ -129,6 +171,47 @@ static void test_parse_number() {
     TEST_NUMBER( 1.7976931348623157e+308, "1.7976931348623157e+308");  /* Max double */
     TEST_NUMBER(-1.7976931348623157e+308, "-1.7976931348623157e+308");
 }
+
+
+static void test_parse_invalid_unicode_hex() 
+{
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u0\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u01\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u012\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u/000\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\uG000\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u0/00\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u0G00\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u00/0\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u00G0\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u000/\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u000G\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_HEX, "\"\\u 123\"");
+}
+
+static void test_parse_invalid_unicode_surrogate() 
+{
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE, "\"\\uDBFF\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\\\\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\uDBFF\"");
+    TESTERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\uE000\"");
+}
+
+
+static void test_access_boolean() 
+{
+    lept_value v;
+    lept_init(&v);
+    lept_set_string(&v, "a", 1);
+    lept_set_boolean(&v, 1);
+    EXPECT_TRUE(lept_get_boolean(&v));
+    lept_set_boolean(&v, 0);
+    EXPECT_FALSE(lept_get_boolean(&v));
+
+    lept_free(&v);
+}
 static void test_parse()
 {
     test_parse_null();
@@ -137,6 +220,10 @@ static void test_parse()
     test_parse_number();
     test_parse_error();
     test_access_string();
+    test_parse_string();
+    test_parse_invalid_unicode_hex();
+    test_parse_invalid_unicode_surrogate();
+    test_access_boolean();
 }
 int main() {
     test_parse();
