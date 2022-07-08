@@ -30,7 +30,8 @@ enum {
     LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET,
     LEPT_PARSE_MISS_KEY,
     LEPT_PARSE_MISS_COLON,
-    LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET
+    LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET,
+    LEPT_STRINGIFY_OK
 };
 #define STRING_ERROR(ret) do { c->top = head; return ret; } while(0)
 typedef struct lept_value lept_value;
@@ -81,7 +82,8 @@ static void*lept_context_pop(lept_context*c,size_t size);
 static void*lept_context_push(lept_context*c,size_t size);
 
 static int lept_parse_string_raw(lept_context* c, char** str, size_t* len) ;
-
-
+static int lept_stringify_value(lept_context* c, const lept_value* v);
+int lept_stringify(const lept_value* v, char** json, size_t* length);
 static int lept_parse_object(lept_context* c, lept_value* v);
+static void lept_stringify_string(lept_context* c, const char* s, size_t len);
 #endif 
