@@ -282,7 +282,6 @@ static void test_access_boolean()
 {
     lept_value v;
     lept_init(&v);
-    lept_set_string(&v, "a", 1);
     lept_set_boolean(&v, 1);
     EXPECT_TRUE(lept_get_boolean(&v));
     lept_set_boolean(&v, 0);
@@ -355,6 +354,163 @@ static void test_stringify() {
 }
 
 
+#define TEST_EQUAL(json1, json2, equality) \
+    do {\
+        lept_value v1, v2;\
+        lept_init(&v1);\
+        lept_init(&v2);\
+        EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v1, json1));\
+        EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v2, json2));\
+        EXPECT_EQ_INT(equality, lept_is_equal(&v1, &v2));\
+        lept_free(&v1);\
+        lept_free(&v2);\
+    } while(0)
+
+static void test_equal() {
+    TEST_EQUAL("true", "true", 1);
+    TEST_EQUAL("true", "false", 0);
+    TEST_EQUAL("false", "false", 1);
+    TEST_EQUAL("null", "null", 1);
+    TEST_EQUAL("null", "0", 0);
+    TEST_EQUAL("123", "123", 1);
+    TEST_EQUAL("123", "456", 0);
+    TEST_EQUAL("\"abc\"", "\"abc\"", 1);
+    TEST_EQUAL("\"abc\"", "\"abcd\"", 0);
+    TEST_EQUAL("[]", "[]", 1);
+    TEST_EQUAL("[]", "null", 0);
+    TEST_EQUAL("[1,2,3]", "[1,2,3]", 1);
+    TEST_EQUAL("[1,2,3]", "[1,2,3,4]", 0);
+    TEST_EQUAL("[[]]", "[[]]", 1);
+    TEST_EQUAL("{}", "{}", 1);
+    TEST_EQUAL("{}", "null", 0);
+    TEST_EQUAL("{}", "[]", 0);
+    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2}", 1);
+    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}", 1);
+    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":3}", 0);
+    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2,\"c\":3}", 0);
+    TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":{}}}}", 1);
+    TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":[]}}}", 0);
+}
+
+static void test_copy() {
+    lept_value v1, v2;
+    lept_init(&v1);
+    lept_parse(&v1, "{\"t\":true,\"f\":false,\"n\":null,\"d\":1.5,\"a\":[1,2,3]}");
+    lept_init(&v2);
+    lept_copy(&v2, &v1);
+    EXPECT_TRUE(lept_is_equal(&v2, &v1));
+    lept_free(&v1);
+    lept_free(&v2);
+}
+
+static void test_move() {
+    lept_value v1, v2, v3;
+    lept_init(&v1);
+    lept_parse(&v1, "{\"t\":true,\"f\":false,\"n\":null,\"d\":1.5,\"a\":[1,2,3]}");
+    lept_init(&v2);
+    lept_copy(&v2, &v1);
+    lept_init(&v3);
+    lept_move(&v3, &v2);
+    EXPECT_EQ_INT(LEPT_NULL, lept_get_type(&v2));
+    EXPECT_TRUE(lept_is_equal(&v3, &v1));
+    lept_free(&v1);
+    lept_free(&v2);
+    lept_free(&v3);
+}
+static void test_swap() {
+    lept_value v1, v2;
+    lept_init(&v1);
+    lept_init(&v2);
+    lept_set_string(&v1, "Hello",  5);
+    lept_set_string(&v2, "World!", 6);
+    lept_swap(&v1, &v2);
+    EXPECT_EQ_STRING("World!", lept_get_string(&v1), lept_get_string_length(&v1));
+    EXPECT_EQ_STRING("Hello",  lept_get_string(&v2), lept_get_string_length(&v2));
+    lept_free(&v1);
+    lept_free(&v2);
+}
+static void test_access_number() {
+    lept_value v;
+    lept_init(&v);
+    lept_set_string(&v, "a", 1);
+    lept_set_number(&v, 1234.5);
+    EXPECT_EQ_DOUBLE(1234.5, lept_get_number(&v));
+    lept_free(&v);
+}
+static void test_access_array() {
+    lept_value a, e;
+    size_t i, j;
+
+    lept_init(&a);
+
+    for (j = 0; j <= 5; j += 5) {
+        lept_set_array(&a, j);
+        EXPECT_EQ_SIZE_T(0, lept_get_array_size(&a));
+        EXPECT_EQ_SIZE_T(j, lept_get_array_capacity(&a));
+        for (i = 0; i < 10; i++) {
+            lept_init(&e);
+            lept_set_number(&e, i);
+            lept_move(lept_pushback_array_element(&a), &e);
+            lept_free(&e);
+        }
+
+        EXPECT_EQ_SIZE_T(10, lept_get_array_size(&a));
+        for (i = 0; i < 10; i++)
+            EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
+    }
+
+    lept_popback_array_element(&a);
+    EXPECT_EQ_SIZE_T(9, lept_get_array_size(&a));
+    for (i = 0; i < 9; i++)
+        EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
+
+    lept_erase_array_element(&a, 4, 0);
+    EXPECT_EQ_SIZE_T(9, lept_get_array_size(&a));
+    for (i = 0; i < 9; i++)
+        EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
+
+    lept_erase_array_element(&a, 8, 1);
+    EXPECT_EQ_SIZE_T(8, lept_get_array_size(&a));
+    for (i = 0; i < 8; i++)
+        EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
+
+    lept_erase_array_element(&a, 0, 2);
+    EXPECT_EQ_SIZE_T(6, lept_get_array_size(&a));
+    for (i = 0; i < 6; i++)
+        EXPECT_EQ_DOUBLE((double)i + 2, lept_get_number(lept_get_array_element(&a, i)));
+
+
+    for (i = 0; i < 2; i++) {
+        lept_init(&e);
+        lept_set_number(&e, i);
+        lept_move(lept_insert_array_element(&a, i), &e);
+        lept_free(&e);
+    }
+    
+    EXPECT_EQ_SIZE_T(8, lept_get_array_size(&a));
+    for (i = 0; i < 8; i++)
+        EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
+
+    EXPECT_TRUE(lept_get_array_capacity(&a) > 8);
+    lept_shrink_array(&a);
+    EXPECT_EQ_SIZE_T(8, lept_get_array_capacity(&a));
+    EXPECT_EQ_SIZE_T(8, lept_get_array_size(&a));
+    for (i = 0; i < 8; i++)
+        EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
+
+    lept_set_string(&e, "Hello", 5);
+    lept_move(lept_pushback_array_element(&a), &e);     /* Test if element is freed */
+    lept_free(&e);
+
+    i = lept_get_array_capacity(&a);
+    lept_clear_array(&a);
+    EXPECT_EQ_SIZE_T(0, lept_get_array_size(&a));
+    EXPECT_EQ_SIZE_T(i, lept_get_array_capacity(&a));   /* capacity remains unchanged */
+    lept_shrink_array(&a);
+    EXPECT_EQ_SIZE_T(0, lept_get_array_capacity(&a));
+
+    lept_free(&a);
+}
 static void test_parse()
 {
     test_parse_null();
@@ -367,12 +523,18 @@ static void test_parse()
     test_parse_invalid_unicode_hex();
     test_parse_invalid_unicode_surrogate();
     test_access_boolean();
+    test_access_number();
     test_parse_array();
     test_parse_miss_comma_or_square_bracket();
     test_parse_miss_key();
     test_parse_miss_colon();
     test_parse_miss_comma_or_curly_bracket();
     test_stringify();
+    test_equal();
+    test_copy();
+    test_move();
+    test_swap();
+    test_access_array();
 }
 int main() {
     test_parse();
